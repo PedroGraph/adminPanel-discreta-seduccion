@@ -1,0 +1,563 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  admin
+  manager
+  employee
+}
+
+enum Status {
+  active
+  inactive
+}
+
+enum ProductStatus {
+  active
+  inactive
+  draft
+}
+
+enum InventoryMovementType {
+  incoming
+  outgoing
+  adjustment
+  transfer
+}
+
+enum SupplierReliability {
+  Low
+  Medium
+  High
+}
+
+enum PurchaseOrderStatus {
+  draft
+  ordered
+  in_transit
+  received
+  cancelled
+}
+
+enum AddressType {
+  billing
+  shipping
+}
+
+enum CouponType {
+  percentage
+  fixed
+}
+
+enum CouponAppliesTo {
+  all
+  categories
+  products
+}
+
+enum CouponStatus {
+  active
+  inactive
+  expired
+}
+
+enum OrderStatus {
+  pending
+  processing
+  shipped
+  delivered
+  cancelled
+  refunded
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+enum ShipmentStatus {
+  processing
+  in_transit
+  delivered
+  failed
+}
+
+enum ReviewStatus {
+  pending
+  published
+  rejected
+}
+
+enum RefundStatus {
+  pending
+  processed
+  rejected
+}
+
+enum EmailType {
+  transactional
+  marketing
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  sent
+  cancelled
+}
+
+enum SubscriberStatus {
+  active
+  inactive
+  unsubscribed
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  role      Role      @default(employee)
+  status    Status    @default(active)
+  lastLogin DateTime? @map("last_login")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  products       Product[]       @relation("CreatedByUser")
+  reviewsReplied Review[]        @relation("RepliedByUser")
+  shipments      Shipment[]      @relation("ShipmentCreatedBy")
+  purchaseOrders PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
+  coupons        Coupon[]
+
+  InventoryMovement InventoryMovement[]
+  activityLogs ActivityLog[]
+  @@map("users")
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  name        String
+  slug        String     @unique
+  description String?
+  status      Status     @default(active)
+  parentId    Int?
+  parent      Category?  @relation("CategoryParent", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryParent")
+  products    Product[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model Product {
+  id            Int                 @id @default(autoincrement())
+  sku           String              @unique
+  name          String
+  slug          String              @unique
+  description   String?
+  price         Decimal
+  costPrice     Decimal?            @map("cost_price")
+  status        ProductStatus       @default(draft)
+  categoryId    Int?
+  createdById   Int?
+  category      Category?           @relation(fields: [categoryId], references: [id])
+  createdBy     User?               @relation("CreatedByUser", fields: [createdById], references: [id])
+  attributes    ProductAttribute[]
+  images        ProductImage[]
+  inventory     Inventory[]
+  movements     InventoryMovement[]
+  suppliers     SupplierProduct[]
+  orderItems    OrderItem[]
+  purchaseItems PurchaseOrderItem[]
+  returnItems   ReturnItem[]
+  reviews       Review[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model ProductAttribute {
+  id             Int      @id @default(autoincrement())
+  productId      Int
+  attributeName  String
+  attributeValue String
+  product        Product  @relation(fields: [productId], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([productId, attributeName])
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  imageUrl  String   @map("image_url")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  sortOrder Int      @default(0) @map("sort_order")
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model Warehouse {
+  id             Int        @id @default(autoincrement())
+  name           String     @unique 
+  location       String
+  address        String?
+  contactPerson  String?   @map("contact_person")
+  contactEmail   String?   @map("contact_email")
+  contactPhone   String?   @map("contact_phone")
+  status         Status     @default(active)
+  inventory      Inventory[]
+  movements      InventoryMovement[]
+  purchaseOrders PurchaseOrder[]
+
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+}
+
+model Inventory {
+  id                Int       @id @default(autoincrement())
+  productId         Int
+  warehouseId       Int
+  quantity          Int       @default(0)
+  availableQuantity Int       @default(0) @map("available_quantity")
+  reservedQuantity  Int       @default(0) @map("reserved_quantity")
+  thresholdQuantity Int?      @map("threshold_quantity")
+  location          String?
+  lastCountedAt     DateTime? @map("last_counted_at")
+  product           Product   @relation(fields: [productId], references: [id])
+  warehouse         Warehouse @relation(fields: [warehouseId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([productId, warehouseId])
+}
+
+model InventoryMovement {
+  id            Int                   @id @default(autoincrement())
+  productId     Int
+  warehouseId   Int
+  quantity      Int
+  type          InventoryMovementType
+  referenceType String?
+  referenceId   String?
+  notes         String?
+  performedById Int?                  @map("performed_by")
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  product     Product   @relation(fields: [productId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  performedBy User?     @relation(fields: [performedById], references: [id])
+}
+
+model Supplier {
+  id               Int                 @id @default(autoincrement())
+  name             String              @unique  // Añade @unique aquí
+  contactPerson    String?             @map("contact_person")
+  email            String?
+  phone            String?
+  address          String?
+  taxId            String?             @map("tax_id")
+  paymentTerms     String?             @map("payment_terms")
+  leadTime         String?             @map("lead_time")
+  reliability      SupplierReliability @default(Medium)
+  status           Status              @default(active)
+
+  supplierProducts SupplierProduct[]
+  purchaseOrders   PurchaseOrder[]
+
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+}
+
+model SupplierProduct {
+  id                   Int      @id @default(autoincrement())
+  supplierId           Int
+  productId            Int
+  supplierSku          String?  @map("supplier_sku")
+  cost                 Decimal?
+  minimumOrderQuantity Int      @default(1) @map("minimum_order_quantity")
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([supplierId, productId])
+}
+
+model PurchaseOrder {
+  id                   Int                 @id @default(autoincrement())
+  poNumber             String              @unique @map("po_number")
+  supplierId           Int
+  warehouseId          Int
+  status               PurchaseOrderStatus @default(draft)
+  orderDate            DateTime            @map("order_date")
+  expectedDeliveryDate DateTime?           @map("expected_delivery_date")
+  deliveryDate         DateTime?           @map("delivery_date")
+  totalAmount          Decimal             @default(0)
+  shippingCost         Decimal?            @default(0) @map("shipping_cost")
+  taxAmount            Decimal?            @default(0) @map("tax_amount")
+  notes                String?
+  createdById          Int?                @map("created_by")
+
+  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+  warehouse Warehouse           @relation(fields: [warehouseId], references: [id])
+  createdBy User?               @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  items     PurchaseOrderItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model PurchaseOrderItem {
+  id               Int     @id @default(autoincrement())
+  purchaseOrderId  Int
+  productId        Int
+  quantity         Int
+  unitCost         Decimal @map("unit_cost")
+  totalCost        Decimal @map("total_cost")
+  receivedQuantity Int     @default(0) @map("received_quantity")
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([purchaseOrderId, productId])
+}
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  phone     String?
+  password  String?
+  status    Status    @default(active)
+  lastLogin DateTime? @map("last_login")
+
+  addresses CustomerAddress[]
+  orders    Order[]
+  returns   Return[]
+  reviews   Review[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model CustomerAddress {
+  id             Int         @id @default(autoincrement())
+  customerId     Int
+  addressType    AddressType
+  isDefault      Boolean     @default(false) @map("is_default")
+  addressLine1   String      @map("address_line1")
+  addressLine2   String?     @map("address_line2")
+  city           String
+  state          String?
+  postalCode     String      @map("postal_code")
+  country        String
+  customer       Customer    @relation(fields: [customerId], references: [id])
+  shippingOrders Order[]     @relation("ShippingAddress")
+  billingOrders  Order[]     @relation("BillingAddress")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model Order {
+  id                Int           @id @default(autoincrement())
+  orderNumber       String        @unique @map("order_number")
+  customerId        Int?
+  status            OrderStatus   @default(pending)
+  totalAmount       Decimal       @default(0) @map("total_amount")
+  subtotal          Decimal       @default(0)
+  taxAmount         Decimal?      @default(0) @map("tax_amount")
+  shippingAmount    Decimal?      @default(0) @map("shipping_amount")
+  discountAmount    Decimal?      @default(0) @map("discount_amount")
+  couponId          Int?
+  shippingAddressId Int?          @map("shipping_address_id")
+  billingAddressId  Int?          @map("billing_address_id")
+  paymentMethod     String?
+  paymentStatus     PaymentStatus @default(pending)
+  notes             String?
+
+  customer        Customer?        @relation(fields: [customerId], references: [id])
+  coupon          Coupon?          @relation(fields: [couponId], references: [id])
+  shippingAddress CustomerAddress? @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  billingAddress  CustomerAddress? @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  items           OrderItem[]
+  shipments       Shipment[]
+  returns         Return[]
+  reviews         Review[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model OrderItem {
+  id          Int          @id @default(autoincrement())
+  orderId     Int
+  productId   Int
+  quantity    Int
+  unitPrice   Decimal      @map("unit_price")
+  totalPrice  Decimal      @map("total_price")
+  order       Order        @relation(fields: [orderId], references: [id])
+  product     Product      @relation(fields: [productId], references: [id])
+  returnItems ReturnItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model Return {
+  id           Int          @id @default(autoincrement())
+  orderId      Int
+  customerId   Int
+  returnNumber String       @unique @map("return_number")
+  status       ReviewStatus @default(pending)
+  reason       String
+  totalAmount  Decimal      @default(0) @map("total_amount")
+  refundAmount Decimal?     @default(0) @map("refund_amount")
+  refundMethod String?
+  refundStatus RefundStatus @default(pending) @map("refund_status")
+  notes        String?
+
+  order    Order        @relation(fields: [orderId], references: [id])
+  customer Customer     @relation(fields: [customerId], references: [id])
+  items    ReturnItem[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model ReturnItem {
+  id          Int     @id @default(autoincrement())
+  returnId    Int
+  orderItemId Int
+  productId   Int
+  quantity    Int
+  unitPrice   Decimal @map("unit_price")
+  totalPrice  Decimal @map("total_price")
+  reason      String?
+
+  return    Return    @relation(fields: [returnId], references: [id])
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id])
+  product   Product   @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model Review {
+  id             Int          @id @default(autoincrement())
+  productId      Int
+  customerId     Int
+  orderId        Int?
+  rating         Int
+  title          String?
+  comment        String?
+  status         ReviewStatus @default(pending)
+  helpfulCount   Int          @default(0) @map("helpful_count")
+  unhelpfulCount Int          @default(0) @map("unhelpful_count")
+  reply          String?
+  repliedById    Int?         @map("replied_by")
+  repliedAt      DateTime?    @map("replied_at")
+
+  product   Product  @relation(fields: [productId], references: [id])
+  customer  Customer @relation(fields: [customerId], references: [id])
+  order     Order?   @relation(fields: [orderId], references: [id])
+  repliedBy User?    @relation("RepliedByUser", fields: [repliedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([customerId, productId, orderId])
+}
+
+model Coupon {
+  id          Int             @id @default(autoincrement())
+  code        String          @unique
+  type        CouponType
+  value       Decimal
+  minPurchase Decimal?        @default(0) @map("min_purchase")
+  maxUses     Int?            @default(0) @map("max_uses")
+  usedCount   Int             @default(0) @map("used_count")
+  startDate   DateTime        @map("start_date")
+  endDate     DateTime        @map("end_date")
+  status      CouponStatus    @default(active)
+  appliesTo   CouponAppliesTo @default(all) @map("applies_to")
+  createdById Int?            @map("created_by")
+
+  createdBy     User?                 @relation(fields: [createdById], references: [id])
+  applicability CouponApplicability[]
+  orders        Order[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model CouponApplicability {
+  id         Int    @id @default(autoincrement())
+  couponId   Int
+  entityType String @map("entity_type")
+  entityId   Int    @map("entity_id")
+  coupon     Coupon @relation(fields: [couponId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([couponId, entityType, entityId])
+}
+
+model Shipment {
+  id             Int            @id @default(autoincrement())
+  orderId        Int
+  trackingNumber String?        @map("tracking_number")
+  carrier        String?
+  shippingMethod String?        @map("shipping_method")
+  status         ShipmentStatus @default(processing)
+  shippedDate    DateTime?      @map("shipped_date")
+  deliveredDate  DateTime?      @map("delivered_date")
+  shippingCost   Decimal?       @default(0) @map("shipping_cost")
+  createdById    Int?           @map("created_by")
+
+  order     Order @relation(fields: [orderId], references: [id])
+  createdBy User? @relation("ShipmentCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model ShippingMethod {
+  id                Int     @id @default(autoincrement())
+  name              String
+  carrier           String
+  price             Decimal
+  estimatedDelivery String? @map("estimated_delivery")
+  active            Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  userEmail   String
+  action      String
+  entityType  String?  @map("entity_type")
+  entityId    Int?     @map("entity_id")
+  description String?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User?    @relation(fields: [userEmail], references: [email])
+}
