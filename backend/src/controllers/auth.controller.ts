@@ -1,20 +1,18 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service.js';
-import { LogService } from '../services/log.service.js';
+import { setActivityToLog } from '../middleware/log.js';
 export class AuthController {
 
 private authService: AuthService;
-private logService: LogService;
 
   constructor() {
     this.authService = new AuthService();
-    this.logService = new LogService();
   }
 
   login = async (req: Request, res: Response) => {
     try {
       const result = await this.authService.login(req.body);
-      await this.logService.createLog(req, {email: req.body.email, action: 'login', entityType: 'user', description: 'Usuario inició sesión'});
+      await setActivityToLog(req, {action: 'login', entityType: 'user', description: `El usuario ${result.email} inició sesión`});
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -24,7 +22,7 @@ private logService: LogService;
   register = async (req: Request, res: Response) => {
     try {
       const result = await this.authService.register(req.body);
-      await this.logService.createLog(req, {email: req.body.email, action: 'register', entityType: 'user', description: 'Usuario registró una cuenta'});
+      await setActivityToLog(req, {action: 'register', entityType: 'user', description: `El usuario ${result.email} registró una cuenta`});
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

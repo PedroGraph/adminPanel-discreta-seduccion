@@ -1,13 +1,16 @@
 import { Request, Response } from 'express';
 import { CouponService } from '../services/coupon.service.js';
+import { setActivityToLog } from '../middleware/log.js';
 
 const couponService = new CouponService();
 
 export class CouponController {
+
     async createCoupon(req: Request, res: Response) {
         try {
             const couponData = req.body;
             const newCoupon = await couponService.createNewCoupon(couponData);
+            await setActivityToLog(req, {action: 'create', entityType: 'coupon', description: `Cupón creado - ${newCoupon.code}. Descuento: ${newCoupon.discountAmount}%. Estado: ${newCoupon.status} - ${newCoupon.endDate}`});
             res.status(201).json(newCoupon);
         } catch (error: any) {
             res.status(400).json({ error: error.message });
@@ -46,6 +49,8 @@ export class CouponController {
                 Number(couponId),
                 status
             );
+
+            await setActivityToLog(req, {action: 'update', entityType: 'coupon', description: `Cupón actualizado - ${updatedCoupon.code}. Estado: ${updatedCoupon.status} - ${updatedCoupon.endDate}`});
             res.json(updatedCoupon);
         } catch (error: any) {
             res.status(400).json({ error: error.message });

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ProductService } from '../services/products.service.js';
+import { setActivityToLog } from '../middleware/log.js';
 
 export class ProductController {
     private productService: ProductService;
@@ -32,6 +33,7 @@ export class ProductController {
         try {
             const product = req.body;
             const newProduct = await this.productService.createProduct(product);
+            await setActivityToLog(req, {action: 'create', entityType: 'product', description: `Producto creado - ${newProduct.name}`});
             res.status(201).json(newProduct);
         } catch (error) {
             res.status(500).json({ error: 'Error al crear el producto' });
@@ -43,6 +45,7 @@ export class ProductController {
             const { id } = req.params;
             const product = req.body;
             const updatedProduct = await this.productService.updateProduct(Number(id), product);
+            await setActivityToLog(req, {action: 'update', entityType: 'product', description: `Producto actualizado - ${updatedProduct.name}`});
             res.status(200).json(updatedProduct);
         } catch (error) {
             res.status(500).json({ error: 'Error al actualizar el producto' });
@@ -53,6 +56,7 @@ export class ProductController {
         try {
             const { id } = req.params;
             const deletedProduct = await this.productService.deleteProduct(Number(id));
+            await setActivityToLog(req, {action: 'delete', entityType: 'product', description: `Producto eliminado - ${deletedProduct.id}`});
             res.status(200).json(deletedProduct);
         } catch (error) {
             res.status(500).json({ error: 'Error al eliminar el producto' });

@@ -1,6 +1,6 @@
+import prisma from '@/lib/prisma.js';
 import { CreateProductData } from '../interfaces/product.interface.js';
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+
 
 export class ProductService {
     
@@ -145,7 +145,8 @@ export class ProductService {
         where: { id },
       });
       
-      return "Producto eliminado exitosamente";
+      return {message: "Producto eliminado exitosamente", id};
+      
     } catch (error) {
       console.error('Error al eliminar el producto:', error);
       throw error;

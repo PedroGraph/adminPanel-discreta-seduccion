@@ -1,5 +1,5 @@
 import { CouponData } from 'prisma/interfaces/schema.js';
-import prisma from '../lib/prisma.js';
+import prisma from '@/lib/prisma.js';
 
 export class CouponService {
     async createNewCoupon(couponData: Omit<CouponData, 'id'>) {
@@ -22,7 +22,6 @@ export class CouponService {
                 categories: couponData.categories
             };
 
-            // Manejo de aplicabilidad a productos o categorías
             if (couponData.appliesTo !== 'all') {
                 const applicabilityData = this.prepareApplicabilityData(couponData);
                 if (applicabilityData.length > 0) {
@@ -58,9 +57,6 @@ export class CouponService {
         if (coupon.status !== 'active') {
             throw new Error('Cupón no está activo');
         }
-
-        // Validar fechas
-
 
         // Validar compra mínima
         if (coupon.minPurchaseAmount && orderAmount < Number(coupon.minPurchaseAmount)) {
