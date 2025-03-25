@@ -37,6 +37,11 @@ export class CouponController {
         try {
             const { couponId } = req.params;
             const { status } = req.body;
+            
+            if(status !== 'active' && status !== 'inactive' && status !== 'expired') {
+                return res.status(400).json({ error: 'Status inválido' });
+            }
+
             const updatedCoupon = await couponService.updateCouponStatus(
                 Number(couponId),
                 status

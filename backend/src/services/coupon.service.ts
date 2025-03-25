@@ -10,14 +10,16 @@ export class CouponService {
                 code: couponData.code,
                 type: couponData.type,
                 value: couponData.value,
-                minPurchase: couponData.minPurchase,    
+                minPurchase: couponData.minPurchase,
                 maxUses: couponData.maxUses,
                 usedCount: couponData.usedCount,
                 startDate: couponData.startDate,
                 endDate: couponData.endDate,
                 status: couponData.status,
                 appliesTo: couponData.appliesTo,
-                createdById: couponData.createdById
+                createdById: couponData.createdById,
+                products: couponData.products,
+                categories: couponData.categories
             };
 
             // Manejo de aplicabilidad a productos o categorías
@@ -61,18 +63,18 @@ export class CouponService {
 
 
         // Validar compra mínima
-        if (coupon.minPurchase && orderAmount < Number(coupon.minPurchase)) {
-            throw new Error(`La compra mínima debe ser de ${coupon.minPurchase}`);
+        if (coupon.minPurchaseAmount && orderAmount < Number(coupon.minPurchaseAmount)) {
+            throw new Error(`La compra mínima debe ser de ${coupon.minPurchaseAmount}`);
         }
 
         // Validar usos máximos
-        if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
+        if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
             throw new Error('Cupón ha alcanzado su límite de usos');
         }
 
         // Validar fechas
         const now = new Date();
-        if (now < coupon.startDate || now > coupon.endDate) {
+        if (now < coupon.startsAt || now > coupon.expiresAt) {
             throw new Error('Cupón fuera de fecha válida');
         }
 
@@ -113,11 +115,11 @@ export class CouponService {
         return prisma.coupon.findMany({
             where: {
                 status: 'active',
-                startDate: { lte: now },
-                endDate: { gte: now },
+                startsAt: { lte: now },
+                expiresAt: { gte: now },
                 OR: [
-                    { maxUses: null },
-                    { usedCount: { lt: prisma.coupon.fields.maxUses } }
+                    { usageLimit: null },
+                    { usedCount: { lt: prisma.coupon.fields.usageLimit } }
                 ]
             },
             include: {
@@ -155,10 +157,10 @@ export class CouponService {
             throw new Error('El número máximo de usos debe ser mayor a 0');
         }
 
-        if (couponData.appliesTo === 'products' && (!couponData.products || couponData.products.length === 0)) {
+        if (couponData.appliesTo === 'specific_products' && (!couponData.products || couponData.products.connect.length === 0)) {
             throw new Error('Debe especificar al menos un producto para este tipo de cupón');
         }
-        if (couponData.appliesTo === 'categories' && (!couponData.categories || couponData.categories.length === 0)) {
+        if (couponData.appliesTo === 'specific_categories' && (!couponData.categories || couponData.categories.connect.length === 0)) {
             throw new Error('Debe especificar al menos una categoría para este tipo de cupón');
         }
     }
@@ -166,14 +168,14 @@ export class CouponService {
     private prepareApplicabilityData(couponData: Omit<CouponData, 'id'>) {
         const applicabilityData = [];
 
-        if (couponData.appliesTo === 'products' && Array.isArray(couponData.products)) {
+        if (couponData.appliesTo === 'specific_products' && Array.isArray(couponData.products)) {
             applicabilityData.push(...couponData.products.map(product => ({
                 entityType: 'product',
                 entityId: product.id
             })));
         }
 
-        if (couponData.appliesTo === 'categories' && Array.isArray(couponData.categories)) {
+        if (couponData.appliesTo === 'specific_categories' && Array.isArray(couponData.categories)) {
             applicabilityData.push(...couponData.categories.map(category => ({
                 entityType: 'category',
                 entityId: category.id

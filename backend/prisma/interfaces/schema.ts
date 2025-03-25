@@ -74,14 +74,20 @@ export interface CouponData {
     code: string;
     type: 'percentage' | 'fixed';
     value: number;
-    minPurchaseAmount: number;
-    maxDiscountAmount?: number;
-    startsAt: Date;
-    expiresAt: Date;
-    usageLimit: number;
-    usageLimitPerUser: number;
+    minPurchase: number;
+    maxUses: number;
+    usedCount: number;
+    startDate: Date;
+    endDate: Date;
     status: 'active' | 'inactive';
     appliesTo: 'all' | 'specific_products' | 'specific_categories';
+    createdById: number;
+    products: {
+        connect: number[];
+    };
+    categories: {
+        connect: number[];
+    };
 }
 
 export interface EmailTemplateData {

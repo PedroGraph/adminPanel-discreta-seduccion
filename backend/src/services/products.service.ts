@@ -1,5 +1,5 @@
 import { CreateProductData } from '../interfaces/product.interface.js';
-import { PrismaClient, Product } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export class ProductService {
