@@ -1,5 +1,5 @@
 import { CouponData } from 'prisma/interfaces/schema.js';
-import prisma from '@/lib/prisma.js';
+import prisma from '../lib/prisma.js';
 
 export class CouponService {
     async createNewCoupon(couponData: Omit<CouponData, 'id'>) {
@@ -59,18 +59,18 @@ export class CouponService {
         }
 
         // Validar compra mínima
-        if (coupon.minPurchaseAmount && orderAmount < Number(coupon.minPurchaseAmount)) {
-            throw new Error(`La compra mínima debe ser de ${coupon.minPurchaseAmount}`);
+        if (coupon.minPurchase && orderAmount < Number(coupon.minPurchase)) {
+            throw new Error(`La compra mínima debe ser de ${coupon.minPurchase}`);
         }
 
         // Validar usos máximos
-        if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+        if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
             throw new Error('Cupón ha alcanzado su límite de usos');
         }
 
         // Validar fechas
         const now = new Date();
-        if (now < coupon.startsAt || now > coupon.expiresAt) {
+        if (now < coupon.startDate || now > coupon.endDate) {
             throw new Error('Cupón fuera de fecha válida');
         }
 
@@ -111,11 +111,11 @@ export class CouponService {
         return prisma.coupon.findMany({
             where: {
                 status: 'active',
-                startsAt: { lte: now },
-                expiresAt: { gte: now },
+                startDate: { lte: now },
+                endDate: { gte: now },
                 OR: [
-                    { usageLimit: null },
-                    { usedCount: { lt: prisma.coupon.fields.usageLimit } }
+                    { maxUses: null },
+                    { usedCount: { lt: prisma.coupon.fields.maxUses } }
                 ]
             },
             include: {
@@ -153,10 +153,10 @@ export class CouponService {
             throw new Error('El número máximo de usos debe ser mayor a 0');
         }
 
-        if (couponData.appliesTo === 'specific_products' && (!couponData.products || couponData.products.connect.length === 0)) {
+        if (couponData.appliesTo === 'products' && (!couponData.products || couponData.products.connect.length === 0)) {
             throw new Error('Debe especificar al menos un producto para este tipo de cupón');
         }
-        if (couponData.appliesTo === 'specific_categories' && (!couponData.categories || couponData.categories.connect.length === 0)) {
+        if (couponData.appliesTo === 'categories' && (!couponData.categories || couponData.categories.connect.length === 0)) {
             throw new Error('Debe especificar al menos una categoría para este tipo de cupón');
         }
     }
@@ -164,14 +164,14 @@ export class CouponService {
     private prepareApplicabilityData(couponData: Omit<CouponData, 'id'>) {
         const applicabilityData = [];
 
-        if (couponData.appliesTo === 'specific_products' && Array.isArray(couponData.products)) {
+        if (couponData.appliesTo === 'products' && Array.isArray(couponData.products)) {
             applicabilityData.push(...couponData.products.map(product => ({
                 entityType: 'product',
                 entityId: product.id
             })));
         }
 
-        if (couponData.appliesTo === 'specific_categories' && Array.isArray(couponData.categories)) {
+            if (couponData.appliesTo === 'categories' && Array.isArray(couponData.categories)) {
             applicabilityData.push(...couponData.categories.map(category => ({
                 entityType: 'category',
                 entityId: category.id

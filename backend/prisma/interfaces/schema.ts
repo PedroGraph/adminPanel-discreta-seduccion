@@ -80,12 +80,12 @@ export interface CouponData {
     startDate: Date;
     endDate: Date;
     status: 'active' | 'inactive';
-    appliesTo: 'all' | 'specific_products' | 'specific_categories';
+    appliesTo: 'all' | 'products' | 'categories';
     createdById: number;
-    products: {
-        connect: number[];
+    products?: {
+        connect: Array<{ id: number }>;
     };
-    categories: {
+    categories?: {
         connect: number[];
     };
 }

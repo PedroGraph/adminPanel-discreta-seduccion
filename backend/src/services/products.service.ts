@@ -1,6 +1,5 @@
-import prisma from '@/lib/prisma.js';
+import prisma from '../lib/prisma.js';
 import { CreateProductData } from '../interfaces/product.interface.js';
-
 
 export class ProductService {
     
@@ -27,6 +26,13 @@ export class ProductService {
 
   async createProduct(productData: Omit<CreateProductData, 'categoryId'> & { categoryId?: number }) {
     try {
+
+      if (!productData.sku) throw new Error('El campo SKU es obligatorio');
+      if (!productData.name) throw new Error('El campo nombre es obligatorio');
+      if (productData.price == null) throw new Error('El campo precio es obligatorio');
+      if (productData.costPrice == null) throw new Error('El campo precio de costo es obligatorio');
+      if (!productData.slug) throw new Error('El campo slug es obligatorio');
+      if (!productData.status) throw new Error('El campo estado es obligatorio');
 
       const productInput: any = {
         sku: productData.sku,
@@ -58,7 +64,7 @@ export class ProductService {
       });
       
       return newProduct;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al crear el producto:', error);
       throw error;
     }
@@ -66,6 +72,8 @@ export class ProductService {
 
   async updateProduct(id: number, productData: Partial<CreateProductData> & { categoryId?: number }) {
     try {
+
+      if(!id) throw new Error('El campo ID es obligatorio');
      
       const updateInput: any = {
         sku: productData.sku,
@@ -118,6 +126,10 @@ export class ProductService {
           images: true
         }
       });
+
+      if (!updatedProduct) {
+        throw new Error(`Producto con ID ${id} no encontrado`);
+      }
       
       return updatedProduct;
     } catch (error) {
@@ -128,33 +140,54 @@ export class ProductService {
 
   async deleteProduct(id: number) {
     try {
+      if (!id) throw new Error('El campo ID es obligatorio');
 
-      await prisma.productAttribute.deleteMany({
-        where: {
-          productId: id
-        }
-      });
-
-      await prisma.productImage.deleteMany({
-        where: {
-          productId: id
-        }
-      });
-        
-      await prisma.product.delete({
+      const product = await prisma.product.findUnique({
         where: { id },
       });
+
+      console.log(product);
+
+      if (!product) {
+        throw new Error(`Producto con ID ${id} no encontrado`);
+      }
+
+      const attributesExist = prisma.productAttribute ? await prisma.productAttribute.findMany({
+        where: { productId: id }
+      }) : [];
+
+      const imagesExist = prisma.productImage ? await prisma.productImage.findMany({
+        where: { productId: id }
+      }) : [];
+
+      if (attributesExist.length > 0) {
+        await prisma.productAttribute.deleteMany({
+          where: { productId: id }
+        });
+      }
+
+      if (imagesExist.length > 0) {
+        await prisma.productImage.deleteMany({
+          where: { productId: id }
+        });
+      }
+
+      const deletedProduct = await prisma.product.delete({
+        where: { id },
+      });
+
+      return { message: "Producto eliminado exitosamente", id };
       
-      return {message: "Producto eliminado exitosamente", id};
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al eliminar el producto:', error);
-      throw error;
+      throw new Error(`Error al eliminar el producto con ID ${id}: ${error.message}`);
     }
   }
 
   async getProductById(id: number) {
     try {
+      if(!id) throw new Error('El campo ID es obligatorio');
+
       const product = await prisma.product.findUnique({
         where: { id },
         include: {
@@ -169,7 +202,7 @@ export class ProductService {
       }
       
       return product;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error al obtener el producto con ID ${id}:`, error);
       throw error;
     }
