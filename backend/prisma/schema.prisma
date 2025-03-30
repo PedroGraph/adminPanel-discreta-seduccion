@@ -121,15 +121,16 @@ enum SubscriberStatus {
 }
 
 model User {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String    @unique
-  password  String
-  role      Role      @default(employee)
-  status    Status    @default(active)
-  lastLogin DateTime? @map("last_login")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id            Int          @id @default(autoincrement())
+  name          String
+  email         String       @unique
+  password      String
+  role          Role         @default(employee)
+  status        Status       @default(active)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  sessions      Session[]
+  activityLogs  ActivityLog[]
 
   products       Product[]       @relation("CreatedByUser")
   reviewsReplied Review[]        @relation("RepliedByUser")
@@ -138,7 +139,6 @@ model User {
   coupons        Coupon[]
 
   InventoryMovement InventoryMovement[]
-  activityLogs ActivityLog[]
   @@map("users")
 }
 
@@ -560,4 +560,17 @@ model ActivityLog {
   userAgent   String?  @map("user_agent")
   createdAt   DateTime @default(now()) @map("created_at")
   user        User?    @relation(fields: [userEmail], references: [email])
+}
+
+model Session {
+  id        String   @id
+  userId    Int
+  token     String
+  ip        String
+  userAgent String
+  createdAt DateTime @default(now()) @map("created_at")
+  lastActive DateTime @default(now()) @map("last_active")
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
 }
