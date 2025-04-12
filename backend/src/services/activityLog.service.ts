@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma.js';
 
 export const createActivityLog = async (data: {
   userEmail: string;
@@ -12,10 +10,16 @@ export const createActivityLog = async (data: {
   userAgent?: string;
 }) => {
   try {
+
+    const user = await prisma.user.findUnique({
+      where: { email: data.userEmail }
+    });
+    const userEmail = user ? data.userEmail : 'system';
+
     return await prisma.activityLog.create({
       data: {
         ...data,
-        userEmail: data.userEmail || 'system',
+        userEmail,
       },
     });
   } catch (error) {

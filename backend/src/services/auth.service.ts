@@ -6,8 +6,8 @@ import prisma from '../lib/prisma.js';
 
 const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutos
-const SESSION_EXPIRY = 24 * 60 * 60 * 1000; // 24 horas
+const LOCKOUT_TIME = 15 * 60 * 1000; 
+const SESSION_EXPIRY = 24 * 60 * 60 * 1000; 
 
 interface LoginAttempt {
   timestamp: number;
@@ -50,12 +50,17 @@ export const createSession = async (
   };
 
   activeSessions.set(sessionId, session);
-  
-  // Usar una tabla temporal para las sesiones
-  await prisma.$executeRaw`
-    INSERT INTO sessions (id, user_id, token, ip, user_agent, created_at, last_active)
-    VALUES (${sessionId}, ${userId}, ${token}, ${ip}, ${userAgent}, ${session.createdAt}, ${session.lastActive})
-  `;
+  await prisma.session.create({
+    data: {
+      id: sessionId,
+      userId: userId,
+      token: token,
+      ip: ip || '127.0.0.1',
+      userAgent: userAgent || 'unknown',
+      createdAt: session.createdAt,
+      lastActive: session.lastActive
+    }
+  });
 
   return session;
 };
@@ -75,11 +80,9 @@ export const validateSession = async (sessionId: string): Promise<boolean> => {
 
 export const invalidateSession = async (sessionId: string): Promise<void> => {
   activeSessions.delete(sessionId);
-  
-  // Eliminar sesión de la tabla temporal
-  await prisma.$executeRaw`
-    DELETE FROM sessions WHERE id = ${sessionId}
-  `;
+  await prisma.session.delete({
+    where: { id: sessionId }
+  });
 };
 
 export const invalidateAllUserSessions = async (userId: number): Promise<void> => {
@@ -107,7 +110,7 @@ export const recordLoginAttempt = async (
   success: boolean,
   userAgent: string
 ): Promise<void> => {
-  // Registrar intento por email
+
   const emailAttempts = loginAttempts.get(email) || [];
   emailAttempts.push({ timestamp: Date.now(), success, ip });
   
@@ -116,7 +119,7 @@ export const recordLoginAttempt = async (
   }
   loginAttempts.set(email, emailAttempts);
 
-  // Registrar intento por IP
+
   const ipAttempts = loginAttempts.get(ip) || [];
   ipAttempts.push({ timestamp: Date.now(), success, ip });
   
@@ -189,7 +192,7 @@ export const sanitizeUserInput = (input: string): string => {
 
 export class AuthService {
   async login(data: { email: string; password: string; ip: string; userAgent: string }) {
-    // Verificar bloqueo por IP
+
     if (isIPBlocked(data.ip)) {
       throw new Error('IP bloqueada temporalmente por múltiples intentos fallidos');
     }
@@ -215,7 +218,6 @@ export class AuthService {
       role: user.role
     });
 
-    // Crear nueva sesión
     await createSession(user.id, token, data.ip, data.userAgent);
     await recordLoginAttempt(data.email, data.ip, true, data.userAgent);
 

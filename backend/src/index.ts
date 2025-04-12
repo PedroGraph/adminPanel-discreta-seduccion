@@ -15,22 +15,22 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configuración de sesión
+if(process.env.SESSION_SECRET === undefined) throw new Error('SESSION_SECRET no esta definido');
+
 const sessionConfig = {
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET!,
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     sameSite: 'strict' as const,
-    maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    maxAge: 24 * 60 * 60 * 1000 
   },
-  name: 'sessionId', // Cambiar el nombre por defecto de la cookie
-  rolling: true, // Renovar la sesión en cada petición
+  name: 'sessionId', 
+  rolling: true, 
 };
 
-// Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -57,7 +57,6 @@ const corsOptions = {
   maxAge: 86400
 };
 
-// Middlewares de seguridad
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -77,7 +76,6 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// Logging de peticiones HTTP
 app.use(morgan('combined', {
   stream: {
     write: (message: string) => securityLogger.info(message.trim())
@@ -85,13 +83,13 @@ app.use(morgan('combined', {
 }));
 
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }))
+app.use(express.urlencoded({ extended: true, limit: '1mb' }))
+
 app.use(session(sessionConfig));
 
-// Monitoreo de seguridad
 app.use(securityMonitor as express.RequestHandler);
 
-// Rate limiting
 app.use(limiter);
 
 app.use('/api', routes);
