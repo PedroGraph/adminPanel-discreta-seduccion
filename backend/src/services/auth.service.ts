@@ -3,9 +3,11 @@ import jwt from 'jsonwebtoken';
 import { logSecurityEvent } from '../utils/securityLogger.js';
 import { randomBytes } from 'crypto';
 import prisma from '../lib/prisma.js';
+import { setActivityToLog } from '@/middleware/log.js';
+import { Request } from 'express';
 
 const SALT_ROUNDS = 12;
-const MAX_LOGIN_ATTEMPTS = 5;
+const MAX_LOGIN_ATTEMPTS = 20;
 const LOCKOUT_TIME = 15 * 60 * 1000; 
 const SESSION_EXPIRY = 24 * 60 * 60 * 1000; 
 
@@ -132,7 +134,7 @@ export const recordLoginAttempt = async (
     type: success ? 'login_attempt' : 'failed_auth',
     ip,
     user: email,
-    details: success ? 'Login successful' : 'Login failed',
+    details: success ? `El usuario ${email} inició sesión` : `El usuario ${email} fallo la autenticación | intentos fallidos: ${emailAttempts.length}`,
     userAgent,
   });
 };
@@ -148,7 +150,7 @@ export const comparePasswords = async (password: string, hash: string): Promise<
 export const generateToken = (user: { id: number; email: string; role: string }): string => {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET || 'your-secret-key',
+    process.env.JWT_SECRET!,
     { expiresIn: '24h' }
   );
 };
@@ -191,25 +193,27 @@ export const sanitizeUserInput = (input: string): string => {
 };
 
 export class AuthService {
-  async login(data: { email: string; password: string; ip: string; userAgent: string }) {
+  async login(req: Request) {
+    const { email, password } = req.body;
+    const ip = req.ip || 'unknown' as string;
+    const userAgent = req.headers['user-agent'] || 'unknown' as string;
 
-    if (isIPBlocked(data.ip)) {
-      throw new Error('IP bloqueada temporalmente por múltiples intentos fallidos');
+    if (isIPBlocked(ip as string)) {
+      throw ({message: 'IP bloqueada temporalmente por múltiples intentos fallidos'});
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: data.email }
+      where: { email }
     });
-
     if (!user) {
-      await recordLoginAttempt(data.email, data.ip, false, data.userAgent);
-      throw new Error('Usuario no encontrado');
+      await recordLoginAttempt(email, ip, false, userAgent);
+      throw ({message: 'Usuario no encontrado'});
     }
 
-    const validPassword = await bcrypt.compare(data.password, user.password);
+    const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
-      await recordLoginAttempt(data.email, data.ip, false, data.userAgent);
-      throw new Error('Contraseña incorrecta');
+      await recordLoginAttempt(email, ip, false, userAgent);
+      throw ({message: 'Usuario no encontrado'});
     }
 
     const token = generateToken({
@@ -218,8 +222,8 @@ export class AuthService {
       role: user.role
     });
 
-    await createSession(user.id, token, data.ip, data.userAgent);
-    await recordLoginAttempt(data.email, data.ip, true, data.userAgent);
+    await createSession(user.id, token, ip, userAgent);
+    await recordLoginAttempt(email, ip, true, userAgent);
 
     return { token, name: user.name, email: user.email, role: user.role };
   }
@@ -232,28 +236,41 @@ export class AuthService {
     await invalidateAllUserSessions(userId);
   }
 
-  async register(data: { name: string; email: string; password: string; role?: string }) {
+  async register(req: Request) {
+    const { name, email, password, role } = req.body;
+
     const existingUser = await prisma.user.findUnique({
-      where: { email: data.email }
+      where: { email }
     });
 
     if (existingUser) {
-      throw new Error('El email ya está registrado');
+      await setActivityToLog(req, {
+        action: "register",
+        entityType: "user",
+        description: `Un usuario no pudo ser registrado - ${email} | El email ya está registrado`,
+      });
+      throw ({message : 'El email ya está registrado'});
     }
 
-    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
-        name: data.name,
-        email: data.email,
+        name,
+        email,
         password: hashedPassword,
-        role: data.role as 'admin' | 'manager' | 'employee',
+        role: role as 'admin' | 'manager' | 'employee',
         status: 'active'
       }
     });
 
-    const { password, ...userWithoutPassword } = user;
+    await setActivityToLog(req, {
+      action: "register",
+      entityType: "user",
+      description: `Usuario registrado - ${user.name} (${user.email})`,
+    });
+
+    const { password: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 } 

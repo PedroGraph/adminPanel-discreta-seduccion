@@ -82,12 +82,8 @@ export interface CouponData {
     status: 'active' | 'inactive';
     appliesTo: 'all' | 'products' | 'categories';
     createdById: number;
-    products?: {
-        connect: Array<{ id: number }>;
-    };
-    categories?: {
-        connect: number[];
-    };
+    products?: Array<{ id: number }>;
+    categories?: Array<{ id: number }>;
 }
 
 export interface EmailTemplateData {

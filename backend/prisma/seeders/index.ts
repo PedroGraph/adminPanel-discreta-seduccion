@@ -10,17 +10,8 @@ import { seedCoupons } from './07-coupons.js';
 
 async function main(): Promise<void> {
   try {
-    console.log('🌱 Iniciando proceso de seed...');
-    
-    await seedUsers();
-    await seedCategories();
-    await seedProducts();
+    console.log('🌱 Iniciando proceso de seed...'); 
     await seedWarehouses();
-    await seedSuppliers();
-    await seedInventory();
-    await seedCoupons();
-    // await seedEmailTemplates();
-
     console.log('✅ Proceso de seed completado exitosamente');
   } catch (error) {
     console.error('❌ Error durante el proceso de seed:', error);

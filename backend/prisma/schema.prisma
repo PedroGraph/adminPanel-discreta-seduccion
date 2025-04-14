@@ -135,8 +135,8 @@ model User {
   products       Product[]       @relation("CreatedByUser")
   reviewsReplied Review[]        @relation("RepliedByUser")
   shipments      Shipment[]      @relation("ShipmentCreatedBy")
-  purchaseOrders PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
-  coupons        Coupon[]
+  purchaseOrders  PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
+  coupons         Coupon[]        @relation("UserCoupons")
 
   InventoryMovement InventoryMovement[]
   @@map("users")
@@ -152,6 +152,7 @@ model Category {
   parent      Category?  @relation("CategoryParent", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryParent")
   products    Product[]
+  coupons     Coupon[]    @relation("CouponCategories")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -179,6 +180,7 @@ model Product {
   purchaseItems PurchaseOrderItem[]
   returnItems   ReturnItem[]
   reviews       Review[]
+  coupons       Coupon[]          @relation("CouponProducts")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -487,20 +489,23 @@ model Review {
 model Coupon {
   id          Int             @id @default(autoincrement())
   code        String          @unique
-  type        CouponType
-  value       Decimal
-  minPurchase Decimal?        @default(0) @map("min_purchase")
-  maxUses     Int?            @default(0) @map("max_uses")
-  usedCount   Int             @default(0) @map("used_count")
+  type        String          // Tipo de descuento (porcentaje o fijo)
+  value       Float           // Valor del descuento
+  minPurchase Float?          // Monto mínimo de compra para usar el cupón
+  maxUses     Int?            // Número máximo de usos permitidos
+  usedCount   Int             @default(0)
   startDate   DateTime        @map("start_date")
   endDate     DateTime        @map("end_date")
-  status      CouponStatus    @default(active)
-  appliesTo   CouponAppliesTo @default(all) @map("applies_to")
+  status      String          // Estado del cupón (activo, inactivo, expirado)
+  appliesTo   String          // Indica a qué se aplica el cupón (todos, productos, categorías)
+  createdBy   User?           @relation("UserCoupons", fields: [createdById], references: [id])
   createdById Int?            @map("created_by")
 
-  createdBy     User?                 @relation(fields: [createdById], references: [id])
   applicability CouponApplicability[]
   orders        Order[]
+
+  products      Product[]             @relation("CouponProducts")
+  categories    Category[]            @relation("CouponCategories")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -563,14 +568,13 @@ model ActivityLog {
 }
 
 model Session {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    Int
   token     String
   ip        String
   userAgent String
-  createdAt DateTime @default(now()) @map("created_at")
-  lastActive DateTime @default(now()) @map("last_active")
+  createdAt DateTime @default(now())
+  lastActive DateTime @default(now())
+  
   user      User     @relation(fields: [userId], references: [id])
-
-  @@map("sessions")
 }

@@ -7,6 +7,7 @@ interface LogData {
   action: string;
   entityType: string;
   description: string;
+  entityId?: number;
 }
 
 export const setActivityToLog = async (req: AuthRequest, logData: LogData) => {

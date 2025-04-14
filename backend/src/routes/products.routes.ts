@@ -10,6 +10,7 @@ router.get('/', productController.getAllProducts);
 router.get('/:id', productController.getProductById);
 router.post('/', auth, createProductValidation, productController.createProduct);
 router.put('/:id', auth, updateProductValidation, productController.updateProduct);
+router.patch('/:id', auth, updateProductValidation, productController.updateProduct);
 router.delete('/:id', auth, productController.deleteProduct);
 
 export default router;
