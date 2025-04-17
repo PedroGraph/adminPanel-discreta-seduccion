@@ -1,5 +1,7 @@
 import prisma from "../lib/prisma.js";
 import { CreateProductData } from "../interfaces/product.interface.js";
+import { setActivityToLog } from "@/middleware/log.js";
+import { Request } from "express";
 
 export class ProductService {
   async getAllProducts() {
@@ -19,21 +21,21 @@ export class ProductService {
         throw { status: 404, message: "No se encontraron productos" };
       return products;
     } catch (error) {
-      console.error("Error al obtener los productos:", error);
       throw error;
     }
   }
 
-  async createProduct(
-    productData: Omit<CreateProductData, "categoryId"> & { categoryId?: number }
-  ) {
+  async createProduct(productData: Omit<CreateProductData, "categoryId"> & { categoryId?: number }, req: Request) {
+
+    let information: object = {
+      status: 0,
+      message: ``,
+    };
+
     try {
-      if (!productData.sku) throw { status: 400, message: "El campo SKU es obligatorio" };
-      if (!productData.name) throw { status: 400, message: "El campo nombre es obligatorio" };
-      if (productData.price == null) throw { status: 400, message: "El campo precio es obligatorio" };
-      if (productData.costPrice == null) throw { status: 400, message: "El campo precio de costo es obligatorio" };
-      if (!productData.slug) throw { status: 400, message: "El campo slug es obligatorio" };
-      if (!productData.status) throw { status: 400, message: "El campo status es obligatorio" };
+
+      const validationError = await productValidations(productData, 'create');
+      if (validationError) throw validationError;
 
       const productInput: any = {
         sku: productData.sku,
@@ -48,12 +50,9 @@ export class ProductService {
         ...(productData.createdById && {
           createdBy: { connect: { id: productData.createdById } },
         }),
+        ...(productData.categoryId && { category: { connect: { id: productData.categoryId } } }),
+        ...(productData.category && { category: productData.category }),
       };
-
-      if (productData.categoryId)
-        productInput.category = { connect: { id: productData.categoryId } };
-      else if (productData.category)
-        productInput.category = productData.category;
 
       const newProduct = await prisma.product.create({
         data: productInput,
@@ -64,28 +63,34 @@ export class ProductService {
         },
       });
 
+      information = { status: 200, message: `Producto ${newProduct.name} creado exitosamente` };
       return newProduct;
     } catch (error: any) {
-      console.error("Error al crear el producto:", error);
+      information = { status: 400, message: `No se pudo crear el producto ${productData.name}` };
       throw error;
+    } finally {
+      setActivityToLog(req, {
+        action: "create",
+        entityType: "product",
+        description: (information as { message: string }).message,
+      });
     }
   }
 
-  async updateProduct(
-    id: number,
-    productData: Partial<CreateProductData> & { categoryId?: number }
-  ) {
+  async updateProduct(id: number, productData: Partial<CreateProductData> & { categoryId?: number }, req: Request) {
+
+    if (!id) throw({ status: 400, message: "El campo ID es obligatorio" });
+
+    let information: object = {
+      status: 0,
+      message: ``,
+    };
+
     try {
-      if (!id) throw({ status: 400, message: "El campo ID es obligatorio" });
 
-      const existingProduct = await prisma.product.findUnique({
-        where: { id },
-      });
-
-      if (!existingProduct) {
-        throw { status: 404, message: `Producto con ID ${id} no encontrado` };
-      }
-
+      const validationError = await productValidations({...productData, id}, 'update');
+      if (validationError) throw validationError;
+      
       const updateInput: any = {
         sku: productData.sku,
         name: productData.name,
@@ -132,56 +137,50 @@ export class ProductService {
         },
       });
 
+      information = { status: 200, message: `Producto ${updatedProduct.name} actualizado exitosamente` }
       return updatedProduct;
     } catch (error) {
+      information = { status: 400, message: `No se pudo actualizar el producto ${productData.name}` };
       throw error;
+    } finally {
+      setActivityToLog(req, {
+        action: "update",
+        entityType: "product",
+        description: (information as { message: string }).message,
+      });
     }
   }
 
-  async deleteProduct(id: number) {
+  async deleteProduct(id: number, req: Request) {
+    
+    if (!id) throw { status: 400, message: "El campo ID es obligatorio" };
+    
+    const validationError = await productValidations({ id }, 'delete');
+    if (validationError) throw (validationError)
+
     try {
-      if (!id) throw { status: 400, message: "El campo ID es obligatorio" };
 
-      const product = await prisma.product.findUnique({
-        where: { id },
-      });
-
-      if (!product) {
-        throw { status: 404, message: `Producto con ID ${id} no encontrado` };
-      }
-
-      const attributesExist = prisma.productAttribute
-        ? await prisma.productAttribute.findMany({
-            where: { productId: id },
-          })
-        : [];
-
-      const imagesExist = prisma.productImage
-        ? await prisma.productImage.findMany({
-            where: { productId: id },
-          })
-        : [];
-
-      if (attributesExist.length > 0) {
-        await prisma.productAttribute.deleteMany({
-          where: { productId: id },
-        });
-      }
-
-      if (imagesExist.length > 0) {
-        await prisma.productImage.deleteMany({
-          where: { productId: id },
-        });
-      }
+      await Promise.all([
+        prisma.productAttribute.deleteMany({ where: { productId: id } }),
+        prisma.productImage.deleteMany({ where: { productId: id } }),
+        prisma.inventory.deleteMany({ where: { productId: id } }),
+        prisma.inventoryMovement.deleteMany({ where: { productId: id } }),
+      ]);
 
       await prisma.product.delete({
         where: { id },
       });
 
+      setActivityToLog(req, {
+        action: "delete",
+        entityType: "product",
+        description: `Producto con ID ${id} eliminado exitosamente`,
+      });
+
       return { message: "Producto eliminado exitosamente", id };
     } catch (error: any) {
-      console.error("Error al eliminar el producto:", error);
-      throw error;
+      console.error(error);
+      throw { status: 400, message: `No se pudo eliminar el producto con ID ${id}` };
     }
   }
 
@@ -201,11 +200,49 @@ export class ProductService {
       if (!product) {
         throw { status: 404, message: `Producto con ID ${id} no encontrado` };
       }
-
       return product;
     } catch (error: any) {
-      console.error(`Error al obtener el producto con ID ${id}:`, error);
       throw error;
     }
   }
 }
+
+interface validationsProducts {
+  slug?: string;
+  sku?: string;
+  id?: number;
+}
+
+const productValidations = async (data: validationsProducts, operation: 'create' | 'update' | 'delete') => {
+  const { slug, sku, id } = data;
+
+  if (operation === 'create') {
+    const [existingSlug, existingSku] = await Promise.all([
+      prisma.product.findUnique({ where: { slug } }),
+      prisma.product.findUnique({ where: { sku } }),
+    ]);
+
+    if (existingSku) {
+      return { status: 400, message: `El SKU ${sku} ya está en uso.` };
+    }
+
+    if (existingSlug) {
+      return { status: 400, message: `El slug ${slug} ya está en uso.` };
+    }
+
+  } else if (operation === 'update') {
+    const product = await prisma.product.findUnique({ where: { id } })
+
+    if (!product) {
+      return { status: 400, message: `No hemos encontrado el producto con ID ${id}.` };
+    }
+
+  } else if (operation === 'delete') {
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      return { status: 404, message: `Producto con ID ${id} no encontrado.` };
+    }
+  }
+
+  return;
+};

@@ -15,6 +15,8 @@ export const createActivityLog = async (data: {
       where: { email: data.userEmail }
     });
     const userEmail = user ? data.userEmail : 'system';
+    
+    console.log(data)
 
     return await prisma.activityLog.create({
       data: {

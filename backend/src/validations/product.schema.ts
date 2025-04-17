@@ -2,45 +2,57 @@ import { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 
 export const createProductSchema = z.object({
-  sku: z.string().min(1, "El SKU es requerido"),
-  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
-  slug: z.string().min(2, "El slug debe tener al menos 2 caracteres"),
-  description: z.string().optional(),
-  price: z.number().positive("El precio debe ser positivo"),
-  costPrice: z
-    .number()
-    .positive("El precio de costo debe ser positivo")
-    .optional(),
-  status: z.enum(["active", "inactive", "draft"]).default("draft"),
-  categoryId: z.number().int().positive().optional(),
-  attributes: z
+  product: z.object({
+    sku: z.string().min(1, "El SKU es requerido"),
+    name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+    slug: z.string().min(2, "El slug debe tener al menos 2 caracteres"),
+    description: z.string().optional(),
+    price: z.number().positive("El precio debe ser positivo"),
+    costPrice: z
+      .number()
+      .positive("El precio de costo debe ser positivo")
+      .optional(),
+    status: z.enum(["active", "inactive", "draft"]).default("draft"),
+    categoryId: z.number().int().positive().optional(),
+    attributes: z
+      .object({
+        create: z.array(
+          z.object({
+            attributeName: z.string(),
+            attributeValue: z.string(),
+          })
+        ),
+      })
+      .optional(),
+    images: z
+      .object({
+        create: z.array(
+          z.object({
+            imageUrl: z.string().url("URL de imagen inválida"),
+            isPrimary: z.boolean().default(false),
+            sortOrder: z.number().int().default(0),
+          })
+        ),
+      })
+      .optional(),
+    category: z
+      .object({
+        name: z.string(),
+        description: z.string().optional(),
+        status: z.enum(["active", "inactive", "draft"]).default("draft"),
+      })
+      .optional(),  
+    
+  }),
+  inventory: z
     .object({
-      create: z.array(
-        z.object({
-          attributeName: z.string(),
-          attributeValue: z.string(),
-        })
-      ),
-    })
-    .optional(),
-  images: z
-    .object({
-      create: z.array(
-        z.object({
-          imageUrl: z.string().url("URL de imagen inválida"),
-          isPrimary: z.boolean().default(false),
-          sortOrder: z.number().int().default(0),
-        })
-      ),
-    })
-    .optional(),
-  category: z
-    .object({
-      name: z.string(),
-      description: z.string().optional(),
-      status: z.enum(["active", "inactive", "draft"]).default("draft"),
-    })
-    .optional(),  
+    warehouseId: z.number().int().positive(),
+    quantity: z.number().int().positive(),
+    availableQuantity: z.number().int().positive().optional(),
+    reservedQuantity: z.number().int().nonnegative().optional(),
+    thresholdQuantity: z.number().int().positive().optional(),
+    location: z.string(),
+  }).optional()
 });
 
 export const updateProductSchema = createProductSchema.partial();

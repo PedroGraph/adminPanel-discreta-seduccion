@@ -1,13 +1,17 @@
 import { Request, Response } from "express";
-import { ProductService } from "../services/products.service.js";
-import { setActivityToLog } from "../middleware/log.js";
-import { set } from "zod";
+import { ProductService } from "@/services/products.service.js";
+import { InventoryService } from "@/services/inventory.service.js";
+import { InventoryMovementService } from "@/services/inventoryMovement.service.js";
 
 export class ProductController {
   private productService: ProductService;
+  private inventoryService: InventoryService;
+  private inventoryMovementService: InventoryMovementService;
 
   constructor() {
     this.productService = new ProductService();
+    this.inventoryService = new InventoryService();
+    this.inventoryMovementService = new InventoryMovementService();
   }
 
   getAllProducts = async (req: Request, res: Response) => {
@@ -30,92 +34,44 @@ export class ProductController {
   };
 
   createProduct = async (req: Request, res: Response) => {
-    let success = false;
-    let newProduct = null;
-    let errorMessage = null;
-  
+    let inventoryData;
     try {
-      const product = req.body;
-      newProduct = await this.productService.createProduct(product);
-      success = true;
-      res.status(201).json(newProduct);
+      let { product, inventory, user } = req.body;
+      const newProduct = await this.productService.createProduct(product, req);
+      if(newProduct) {
+        inventory.productId = newProduct.id;
+        inventoryData = await this.inventoryService.createInventory(inventory, req);
+      }
+      if(inventoryData && user) {
+        inventory.productId = newProduct.id;
+        inventory.performedById = user.id;
+        await this.inventoryMovementService.createInventoryMovement(inventory, req);
+      }
+      res.status(201).json({ message: `El producto ${newProduct.name} ha sido creado. Al ser un nuevo producto, se ha creado un inventario para este producto.`});
     } catch (error: any) {
-      errorMessage = error;
-      res.status(500).json({ error: errorMessage });
-    } finally {
-      await setActivityToLog(req, {
-        action: "create",
-        entityType: "product",
-        description: success 
-          ? `Producto creado - ${newProduct?.name}`
-          : `Error al crear el producto | ${errorMessage.message}`,
-      });
-    }
+      res.status(404).json({ error: error.message});
+    } 
   };
 
   updateProduct = async (req: Request, res: Response) => {
-
-    let success = false;
-    let errorMessage = null;
-    let productUpdated = null;
-    let reason = null;
-
     try {
       const { id } = req.params;
       const product = req.body;
-      const updatedProduct = await this.productService.updateProduct(
-        Number(id),
-        product
-      );
-      success = true;
-      productUpdated = updatedProduct;
-      reason = product?.reason;
+      const updatedProduct = await this.productService.updateProduct(Number(id), product, req);
       res.status(200).json(updatedProduct);
-
     } catch (error: any) {
-      errorMessage = error;
-      res.status(error.status).json({ error: `${error.message}` });
-
-    }finally {
-      setActivityToLog(req, {
-        action: "update",
-        entityType: "product",
-        entityId: Number(req.params.id), 
-        description: success 
-          ? `Producto actualizado - ${productUpdated?.name} ${reason ? '| Motivo: ' + reason : ''}`
-          : `Error al actualizar el producto con id: ${req.params.id} | ${errorMessage.message}`,
-      })
-
+      res.status(error.status || 404).json({ error: `${error.message}` });
     }
   };
 
   deleteProduct = async (req: Request, res: Response) => {
-
-    let success = false;
-    let errorMessage = null;
-    let productDeleted = null;
-
     try {
       const { id } = req.params;
-      const deletedProduct = await this.productService.deleteProduct(
-        Number(id)
-      );
-      success = true;
-      productDeleted = deletedProduct;
-
+      const deletedProduct = await this.productService.deleteProduct(Number(id), req);
       res.status(200).json(deletedProduct);
     } catch (error: any) {
-      errorMessage = error;
-      res.status(error.status).json({ error: `${error.message}` });
-    }finally{
-      setActivityToLog(req, {
-        action: "delete",
-        entityType: "product",
-        entityId: Number(req.params.id), 
-        description: success 
-          ? `Producto eliminado - ${productDeleted?.id}`
-          : `Error al eliminar el producto con id: ${req.params.id} | ${errorMessage.message}`,
-      })
+      console.log(error)
+      res.status(404).json({ error: `${error.message}` });
     }
   };
 }
