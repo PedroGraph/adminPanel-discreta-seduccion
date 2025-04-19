@@ -36,7 +36,7 @@ export class InventoryMovementService {
       return { information, status: true, inventoryMovement };
     } catch (error: any) {
       information = { message: "No se pudo crear el movimiento de inventario", status: false };
-      throw error;
+      throw information;
     } finally {
       setActivityToLog(req, {
         action: "create",
@@ -65,7 +65,7 @@ export class InventoryMovementService {
       };
     } catch (error: any) {
       information = { message: "No se pudo actualizar el movimiento de inventario", status: false };
-      throw error;
+      throw information;
     } finally {
       setActivityToLog(req, {
         action: "update",
@@ -77,9 +77,10 @@ export class InventoryMovementService {
 
   async searchInventoryMovementByAnyField(field: string, value: string) {
     try {
-      const inventoryMovement = await prisma.inventoryMovement.findFirst({
-        where: { [field]: value },
-      });
+      const inventoryMovement = field.includes('id') ? 
+      await prisma.inventoryMovement.findUnique({ where: { id: Number(value) } }) : 
+      await prisma.inventoryMovement.findFirst({ where: { [field]: value }});
+
       return inventoryMovement
         ? {
             message: "Movimiento de inventario encontrado",

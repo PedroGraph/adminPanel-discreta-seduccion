@@ -18,7 +18,7 @@ export class InventoryService {
       return { message: "Inventario creado", status: true, inventory };
     } catch (error: any) {
       information = { message: "No se pudo crear el inventario", status: false };
-      throw error;
+      throw information;
     }finally{
       setActivityToLog(req, {
         action: "create",
@@ -41,7 +41,7 @@ export class InventoryService {
       return { message: "Inventario actualizado", status: true, inventory };
     } catch (error: any) {
       information = { message: "No se pudo actualizar el inventario", status: false };
-      throw error;
+      throw information;
     }finally{
       setActivityToLog(req, {
         action: "update",
@@ -64,7 +64,7 @@ export class InventoryService {
       return { message: "Inventario eliminado", status: true, inventory };
     } catch (error: any) {
       information = { message: "No se pudo eliminar el inventario", status: false };
-      throw error;
+      throw information;
     }finally{
       setActivityToLog(req, {
         action: "delete",

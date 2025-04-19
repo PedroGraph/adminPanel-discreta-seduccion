@@ -67,7 +67,7 @@ export class ProductService {
       return newProduct;
     } catch (error: any) {
       information = { status: 400, message: `No se pudo crear el producto ${productData.name}` };
-      throw error;
+      throw information;
     } finally {
       setActivityToLog(req, {
         action: "create",
@@ -141,7 +141,7 @@ export class ProductService {
       return updatedProduct;
     } catch (error) {
       information = { status: 400, message: `No se pudo actualizar el producto ${productData.name}` };
-      throw error;
+      throw information;
     } finally {
       setActivityToLog(req, {
         action: "update",
@@ -179,7 +179,6 @@ export class ProductService {
 
       return { message: "Producto eliminado exitosamente", id };
     } catch (error: any) {
-      console.error(error);
       throw { status: 400, message: `No se pudo eliminar el producto con ID ${id}` };
     }
   }
