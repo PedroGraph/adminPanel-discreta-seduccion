@@ -5,6 +5,8 @@ import { randomBytes } from 'crypto';
 import prisma from '../lib/prisma.js';
 import { setActivityToLog } from '@/middleware/log.js';
 import { Request } from 'express';
+import { generateToken } from '../utils/jwt.js';
+import { handlePrismaError } from '../utils/handleErrors.js';
 
 const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 20;
@@ -147,16 +149,12 @@ export const comparePasswords = async (password: string, hash: string): Promise<
   return bcrypt.compare(password, hash);
 };
 
-export const generateToken = (user: { id: number; email: string; role: string }): string => {
-  return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
-    process.env.JWT_SECRET!,
-    { expiresIn: '24h' }
-  );
-};
-
 export const verifyToken = (token: string): any => {
-  return jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+  try{
+    return jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+  }catch(error){
+    return null;
+  }
 };
 
 export const isAccountLocked = (email: string): boolean => {
@@ -198,34 +196,41 @@ export class AuthService {
     const ip = req.ip || 'unknown' as string;
     const userAgent = req.headers['user-agent'] || 'unknown' as string;
 
-    if (isIPBlocked(ip as string)) {
-      throw ({message: 'IP bloqueada temporalmente por múltiples intentos fallidos'});
+    try {
+      if (isIPBlocked(ip as string)) {
+        throw { status: 403, message: 'IP bloqueada temporalmente por múltiples intentos fallidos' };
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { email }
+      });
+      if (!user) {
+        await recordLoginAttempt(email, ip, false, userAgent);
+        throw { status: 404, message: 'Usuario no encontrado' };
+      }
+
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        await recordLoginAttempt(email, ip, false, userAgent);
+        throw { status: 401, message: 'Contraseña incorrecta' };
+      }
+
+      const token = generateToken({
+        id: user.id,
+        email: user.email,
+        role: user.role
+      });
+
+      await createSession(user.id, token, ip, userAgent);
+      await recordLoginAttempt(email, ip, true, userAgent);
+
+      return { token, name: user.name, email: user.email, role: user.role };
+    } catch (error: any) {
+      if (error.status) {
+        throw error;
+      }
+      throw handlePrismaError(error);
     }
-
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
-    if (!user) {
-      await recordLoginAttempt(email, ip, false, userAgent);
-      throw ({message: 'Usuario no encontrado'});
-    }
-
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      await recordLoginAttempt(email, ip, false, userAgent);
-      throw ({message: 'Usuario no encontrado'});
-    }
-
-    const token = generateToken({
-      id: user.id,
-      email: user.email,
-      role: user.role
-    });
-
-    await createSession(user.id, token, ip, userAgent);
-    await recordLoginAttempt(email, ip, true, userAgent);
-
-    return { token, name: user.name, email: user.email, role: user.role };
   }
 
   async logout(sessionId: string): Promise<void> {
@@ -239,38 +244,45 @@ export class AuthService {
   async register(req: Request) {
     const { name, email, password, role } = req.body;
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
+    try {
+      const existingUser = await prisma.user.findUnique({
+        where: { email }
+      });
 
-    if (existingUser) {
+      if (existingUser) {
+        await setActivityToLog(req, {
+          action: "register",
+          entityType: "user",
+          description: `Un usuario no pudo ser registrado - ${email} | El email ya está registrado`,
+        });
+        throw { status: 400, message: 'El email ya está registrado' };
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const user = await prisma.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          role: role as 'admin' | 'manager' | 'employee',
+          status: 'active'
+        }
+      });
+
       await setActivityToLog(req, {
         action: "register",
         entityType: "user",
-        description: `Un usuario no pudo ser registrado - ${email} | El email ya está registrado`,
+        description: `Usuario registrado - ${user.name} (${user.email})`,
       });
-      throw ({message : 'El email ya está registrado'});
-    }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role as 'admin' | 'manager' | 'employee',
-        status: 'active'
+      const { password: _, ...userWithoutPassword } = user;
+      return userWithoutPassword;
+    } catch (error: any) {
+      if (error.status) {
+        throw error;
       }
-    });
-
-    await setActivityToLog(req, {
-      action: "register",
-      entityType: "user",
-      description: `Usuario registrado - ${user.name} (${user.email})`,
-    });
-
-    const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+      throw handlePrismaError(error);
+    }
   }
 } 

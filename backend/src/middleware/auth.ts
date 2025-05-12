@@ -8,11 +8,11 @@ export const auth: AuthMiddleware = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    const ip = req.ip || 'unknown';
-    const userAgent = req.get('user-agent') || 'unknown';
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  const ip = req.ip || 'unknown';
+  const userAgent = req.get('user-agent') || 'unknown';
 
+  try {
     if (!token) {
       await logSecurityEvent({
         type: 'failed_auth',
@@ -25,9 +25,19 @@ export const auth: AuthMiddleware = async (
     }
 
     const decoded = verifyToken(token);
+    if (!decoded) {
+      await logSecurityEvent({
+        type: 'failed_auth',
+        ip,
+        details: 'Invalid token',
+        userAgent,
+      });
+      res.status(401).json({ message: 'Invalid token' });
+      return;
+    }
+
     req.user = decoded;
 
-    // Verificar si la cuenta está bloqueada
     if (isAccountLocked(decoded.email)) {
       await logSecurityEvent({
         type: 'failed_auth',
@@ -42,7 +52,6 @@ export const auth: AuthMiddleware = async (
       return;
     }
 
-    // Verificar rol de administrador
     if (decoded.role !== 'admin') {
       await logSecurityEvent({
         type: 'failed_auth',
@@ -55,7 +64,6 @@ export const auth: AuthMiddleware = async (
       return;
     }
 
-    // Verificar expiración del token
     if (decoded.exp && decoded.exp < Date.now() / 1000) {
       await logSecurityEvent({
         type: 'failed_auth',
@@ -69,17 +77,21 @@ export const auth: AuthMiddleware = async (
     }
     
     next();
-  } catch (error) {
-    const ip = req.ip || 'unknown';
-    const userAgent = req.get('user-agent') || 'unknown';
+  } catch (error: any) {
+    console.error('Authentication error:', error);
     
     await logSecurityEvent({
       type: 'failed_auth',
       ip,
-      details: 'Invalid token',
+      details: error.message || 'Authentication error',
       userAgent,
     });
     
-    res.status(401).json({ message: 'Token is not valid' });
+    if (!res.headersSent) {
+      res.status(401).json({ 
+        message: error.message || 'Token is not valid',
+        error: error.name || 'AuthenticationError'
+      });
+    }
   }
 }; 

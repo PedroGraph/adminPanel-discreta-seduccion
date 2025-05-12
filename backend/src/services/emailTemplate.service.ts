@@ -3,6 +3,7 @@ import { setActivityToLog } from "../middleware/log.js";
 import { Request } from "express";
 import { emailTemplateFieldSelector } from "@/models/emailTemplate.model.js";
 import prisma from "../lib/prisma.js";
+import { handlePrismaError } from '../utils/handleErrors.js';
 
 export class EmailTemplateService {
 
@@ -21,10 +22,11 @@ export class EmailTemplateService {
             if(campaign) await prisma.emailCampaign.create({ data: { ...campaign, templateId: emailData.id } });
 
             information = { message: `Plantilla de correo creada con éxito | ${emailData.id} - ${emailData.name}`, status: 202 };
-            return { message: "Plantilla de correo creada" };
+            return { message: "Plantilla de correo creada", status: 202, emailData };
             
         } catch (error) {
-            information = { message: "No se pudo crear la plantilla de correo", status: 400 };
+            const handledError = handlePrismaError(error);
+            information = { message: handledError.message, status: handledError.status };
             throw information;
 
         }finally{
@@ -51,7 +53,8 @@ export class EmailTemplateService {
             return { message: "Plantillas de correo obtenidas", status: 202, emailData };
 
         } catch (error) {
-            information = { message: "No se pudo obtener las plantillas de correo", status: 400 };
+            const handledError = handlePrismaError(error);
+            information = { message: handledError.message, status: handledError.status };
             throw information;
             
         }
@@ -72,9 +75,9 @@ export class EmailTemplateService {
             return { message: "Plantilla de correo obtenida", status: 202, emailData };
 
         } catch (error) {            
-            information = { message: "No se pudo obtener la plantilla de correo", status: 400 };
+            const handledError = handlePrismaError(error);
+            information = { message: handledError.message, status: handledError.status };
             throw information;
-            
         }   
     }
 
@@ -90,7 +93,8 @@ export class EmailTemplateService {
             return { message: "Plantilla de correo actualizada", status: 202 };
 
         } catch (error) {
-            information = { message: "No se pudo actualizar la plantilla de correo", status: 400 };
+            const handledError = handlePrismaError(error);
+            information = { message: handledError.message, status: handledError.status };
             throw information;
         }finally{
             setActivityToLog(req, {
@@ -108,15 +112,26 @@ export class EmailTemplateService {
         };
 
         try {
+            const verifyEmailTemplate = await this.getOneEmailTemplate(id);
+            if (!verifyEmailTemplate.emailData) throw { status: 400, message: "La plantilla de correo no existe" };
+
+            const campaigns = await prisma.emailCampaign.findMany({ where: { templateId: id } });
+            if (campaigns.length > 0) {
+                for (const campaign of campaigns) {
+                    await prisma.emailRecipient.deleteMany({ where: { campaignId: campaign.id } });
+                }
+                await prisma.emailCampaign.deleteMany({ where: { templateId: id } });
+            }
+
             const emailData = await prisma.emailTemplate.delete({ where: { id } });
-            information = { message: `Plantilla de correo eliminada con éxito | ${emailData.id} - ${emailData.name}`, status: 202 };            
+            information = { message: `Plantilla de correo eliminada con éxito | ${emailData.id}`, status: 202 };
             return { message: "Plantilla de correo eliminada", status: 202 };
 
         } catch (error) {
-            console.log(error)
-            information = { message: "No se pudo eliminar la plantilla de correo", status: 400 };
+            const handledError = handlePrismaError(error);
+            information = { message: handledError.message, status: handledError.status };
             throw information;
-        }finally{
+        } finally {
             setActivityToLog(req, {
                 action: "delete",
                 entityType: "emailTemplate",

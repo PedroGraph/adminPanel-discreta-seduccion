@@ -5,6 +5,7 @@ export const emailTemplateFieldSelector = {
     type: true,
     status: true,
     description: true,
+    html: true,
     lastEditedBy: {
         select: {
             id: true,
@@ -17,4 +18,30 @@ export const emailTemplateFieldSelector = {
             name: true,
         },
     },
+}
+
+export const emailCampaignFields = {
+   id: true,
+   name: true,
+   subject: true,
+   status: true,
+}
+
+export const emailCampaignSelector = {
+      id: true,
+      name: true,
+      subject: true,
+      status: true,
+      template:{
+        select:{
+          id: true,
+          name: true
+        }
+      },
+      recipients: {
+        select: {
+          opened: true,
+          clicked: true,
+        },
+      },
 }

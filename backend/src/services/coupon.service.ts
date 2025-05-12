@@ -1,6 +1,6 @@
 import { CouponData } from 'prisma/interfaces/schema.js';
 import prisma from '../lib/prisma.js';
-import { copyFile } from 'fs';
+import { handlePrismaError } from '../utils/handleErrors.js';
 
 export class CouponService {
     async createNewCoupon(couponData: Omit<CouponData, 'id'>) {
@@ -42,42 +42,45 @@ export class CouponService {
             });
             return coupon;
         } catch (error) {
-            throw error;
+            throw handlePrismaError(error);
         }
     }
 
     async validateCoupon(code: string, orderAmount: number) {
+        try {
+            const coupon = await prisma.coupon.findUnique({
+                where: { code },
+                include: { applicability: true }
+            });
 
-        const coupon = await prisma.coupon.findUnique({
-            where: { code },
-            include: { applicability: true }
-        });
+            if (!coupon) {
+                throw ({status: 404, message: 'Cupón no encontrado', coupon: false});
+            }
 
-        if (!coupon) {
-            throw ({status: 404, message: 'Cupón no encontrado', coupon: false});
+            if (coupon.status !== 'active') {
+                throw ({status: 400, message: 'Cupón no activo', coupon: false});
+            }
+
+            // Validar compra mínima
+            if (coupon.minPurchase && orderAmount < Number(coupon.minPurchase)) {
+                throw ({status: 400, message: 'Compra no alcanza el mínimo requerido', coupon: false});
+            }
+
+            // Validar usos máximos
+            if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
+                throw ({status: 400, message: 'Cupón no disponible', coupon: false});
+            }
+
+            // Validar fechas
+            const now = new Date();
+            if (now < coupon.startDate || now > coupon.endDate) {
+                throw ({status: 400, message: 'Cupón no disponible', coupon: false});
+            }
+
+            return {message: "Cupón valido", coupon: true};
+        } catch (error) {
+            throw handlePrismaError(error);
         }
-
-        if (coupon.status !== 'active') {
-            throw ({status: 400, message: 'Cupón no activo', coupon: false});
-        }
-
-        // Validar compra mínima
-        if (coupon.minPurchase && orderAmount < Number(coupon.minPurchase)) {
-            throw ({status: 400, message: 'Compra no alcanza el mínimo requerido', coupon: false});
-        }
-
-        // Validar usos máximos
-        if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
-            throw ({status: 400, message: 'Cupón no disponible', coupon: false});
-        }
-
-        // Validar fechas
-        const now = new Date();
-        if (now < coupon.startDate || now > coupon.endDate) {
-            throw ({status: 400, message: 'Cupón no disponible', coupon: false});
-        }
-
-        return {message: "Cupón valido", coupon: true};
     }
 
     async applyCouponToOrder(couponId: number, orderId: number, orderAmount: number) {
@@ -142,32 +145,35 @@ export class CouponService {
     }
 
     private async validateCouponData(couponData: Omit<CouponData, 'id'>) {
+        try {
+            const existingCoupon = await prisma.coupon.findUnique({
+                where: { code: couponData.code }
+            });
 
-        const existingCoupon = await prisma.coupon.findUnique({
-            where: { code: couponData.code }
-        });
+            if (existingCoupon) {
+                throw ({status: 400, message: 'El código del cupón ya existe'});
+            }
 
-        if (existingCoupon) {
-            throw ('El código del cupón ya existe');
-        }
+            if (couponData.endDate <= couponData.startDate) {
+                throw ({status: 400, message: 'La fecha de fin debe ser posterior a la fecha de inicio'});
+            }
 
-        if (couponData.endDate <= couponData.startDate) {
-            throw ('La fecha de fin debe ser posterior a la fecha de inicio');
-        }
+            if (Number(couponData.value) <= 0) {
+                throw ({status: 400, message: 'El valor del cupón debe ser mayor a 0'});
+            }
 
-        if (Number(couponData.value) <= 0) {
-            throw ('El valor del cupón debe ser mayor a 0');
-        }
+            if (couponData.maxUses && couponData.maxUses <= 0) {
+                throw ({status: 400, message: 'El número máximo de usos debe ser mayor a 0'});
+            }
 
-        if (couponData.maxUses && couponData.maxUses <= 0) {
-            throw new Error('El número máximo de usos debe ser mayor a 0');
-        }
-
-        if (couponData.appliesTo === 'products' && (!couponData.products || couponData.products?.length === 0)) {
-            throw ('Debe especificar al menos un producto para este tipo de cupón');
-        }
-        if (couponData.appliesTo === 'categories' && (!couponData.categories || couponData.categories?.length === 0)) {
-            throw ('Debe especificar al menos una categoría para este tipo de cupón');
+            if (couponData.appliesTo === 'products' && (!couponData.products || couponData.products?.length === 0)) {
+                throw ({status: 400, message: 'Debe especificar al menos un producto para este tipo de cupón'});
+            }
+            if (couponData.appliesTo === 'categories' && (!couponData.categories || couponData.categories?.length === 0)) {
+                throw ({status: 400, message: 'Debe especificar al menos una categoría para este tipo de cupón'});
+            }
+        } catch (error) {
+            throw handlePrismaError(error);
         }
     }
 

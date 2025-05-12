@@ -13,7 +13,9 @@ export class AuthController {
       const result = await this.authService.login(req);
       res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      const status = error.status || 500;
+      const message = error.message || 'Error interno del servidor';
+      res.status(status).json({ error: message });
     }
   };
 
@@ -22,7 +24,9 @@ export class AuthController {
       const result = await this.authService.register(req);
       res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      const status = error.status || 500;
+      const message = error.message || 'Error interno del servidor';
+      res.status(status).json({ error: message });
     }
   };
 }

@@ -1,4 +1,5 @@
-import prisma from '../lib/prisma.js';
+import prisma from "../lib/prisma.js";
+import { handlePrismaError } from "../utils/handleErrors.js";
 
 export const createActivityLog = async (data: {
   userEmail: string;
@@ -10,22 +11,19 @@ export const createActivityLog = async (data: {
   userAgent?: string;
 }) => {
   try {
+    const user = await prisma.user.findUnique({ where: { email: data.userEmail }});
+    const userEmail = user ? data.userEmail : "system";
 
-    const user = await prisma.user.findUnique({
-      where: { email: data.userEmail }
-    });
-    const userEmail = user ? data.userEmail : 'system';
-    
-    console.log(data)
-
-    return await prisma.activityLog.create({
-      data: {
-        ...data,
-        userEmail,
-      },
-    });
-  } catch (error) {
-    console.error('Error creating activity log:', error);
-    return null;
+    try {
+      const log = await prisma.activityLog.create({data: { ...data, userEmail }});
+      return log;
+    } catch (error) {
+      throw (handlePrismaError(error));
+    }
+  } catch (error: any) {
+    if (error.status) {
+      throw error;
+    }
+    throw handlePrismaError(error);
   }
-}; 
+};

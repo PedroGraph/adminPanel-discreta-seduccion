@@ -2,6 +2,7 @@ import prisma from "../lib/prisma.js";
 import { CreateProductData } from "../interfaces/product.interface.js";
 import { setActivityToLog } from "@/middleware/log.js";
 import { Request } from "express";
+import { handlePrismaError } from "../utils/handleErrors.js";
 
 export class ProductService {
   async getAllProducts() {
@@ -21,7 +22,7 @@ export class ProductService {
         throw { status: 404, message: "No se encontraron productos" };
       return products;
     } catch (error) {
-      throw error;
+      throw handlePrismaError(error);
     }
   }
 
@@ -66,7 +67,8 @@ export class ProductService {
       information = { status: 200, message: `Producto ${newProduct.name} creado exitosamente` };
       return newProduct;
     } catch (error: any) {
-      information = { status: 400, message: `No se pudo crear el producto ${productData.name}` };
+      const handledError = handlePrismaError(error);
+      information = { status: handledError.status, message: handledError.message };
       throw information;
     } finally {
       setActivityToLog(req, {
@@ -139,8 +141,9 @@ export class ProductService {
 
       information = { status: 200, message: `Producto ${updatedProduct.name} actualizado exitosamente` }
       return updatedProduct;
-    } catch (error) {
-      information = { status: 400, message: `No se pudo actualizar el producto ${productData.name}` };
+    } catch (error: any) {
+      const handledError = handlePrismaError(error);
+      information = { status: handledError.status, message: handledError.message };
       throw information;
     } finally {
       setActivityToLog(req, {
@@ -158,6 +161,11 @@ export class ProductService {
     const validationError = await productValidations({ id }, 'delete');
     if (validationError) throw (validationError)
 
+    let information: object = {
+      status: 0,
+      message: ``,
+    };
+
     try {
 
       await Promise.all([
@@ -171,15 +179,18 @@ export class ProductService {
         where: { id },
       });
 
+      information = { message: `Producto con ID ${id} eliminado exitosamente`, status: 200 };
+      return { message: "Producto eliminado exitosamente", id };
+    } catch (error: any) {
+      const handledError = handlePrismaError(error);
+      information = { status: handledError.status, message: handledError.message };
+      throw information;
+    } finally {
       setActivityToLog(req, {
         action: "delete",
         entityType: "product",
-        description: `Producto con ID ${id} eliminado exitosamente`,
+        description: (information as { message: string }).message,
       });
-
-      return { message: "Producto eliminado exitosamente", id };
-    } catch (error: any) {
-      throw { status: 400, message: `No se pudo eliminar el producto con ID ${id}` };
     }
   }
 
@@ -201,7 +212,7 @@ export class ProductService {
       }
       return product;
     } catch (error: any) {
-      throw error;
+      throw handlePrismaError(error);
     }
   }
 }

@@ -2,14 +2,14 @@ import prisma from "../lib/prisma.js";
 import { CreateInventoryMovementData } from "../interfaces/inventory.interface.js";
 import { setActivityToLog } from "../middleware/log.js";
 import { Request } from "express";
+import { handlePrismaError } from "../utils/handleErrors.js";
 
 export class InventoryMovementService {
   async createInventoryMovement(data: any, req: Request) {
-
     let information: object = {
-        status: 0,
-        message: ``,
-      };
+      status: 0,
+      message: ``,
+    };
 
     const user = await prisma.user.findUnique({
       where: { id: data.performedById },
@@ -32,10 +32,15 @@ export class InventoryMovementService {
       }
 
       const inventoryMovement = await prisma.inventoryMovement.create({ data: inventory });
-      information = { message: `Movimiento de inventario creado con éxito - ${inventoryMovement.id}`, status: true, inventoryMovement };
-      return { information, status: true, inventoryMovement };
+      information = { message: `Movimiento de inventario creado con éxito - ${inventoryMovement.id}`, status: true, inventoryMovement };
+      return {
+        message: "Movimiento de inventario creado",
+        status: true,
+        inventoryMovement,
+      };
     } catch (error: any) {
-      information = { message: "No se pudo crear el movimiento de inventario", status: false };
+      const handledError = handlePrismaError(error);
+      information = { message: handledError.message, status: false };
       throw information;
     } finally {
       setActivityToLog(req, {
@@ -48,23 +53,24 @@ export class InventoryMovementService {
 
   async updateInventoryMovement(id: number, data: Partial<CreateInventoryMovementData>, req: Request) {
     let information: object = {
-        status: 0,
-        message: ``,
-      };
+      status: 0,
+      message: ``,
+    };
   
     try {
       const inventoryMovement = await prisma.inventoryMovement.update({
         where: { id },
         data,
       });
-      information = { message: `Movimiento de inventario actualizado con éxito - ${inventoryMovement.id}`, status: true, inventoryMovement };
+      information = { message: `Movimiento de inventario actualizado con éxito - ${inventoryMovement.id}`, status: true, inventoryMovement };
       return {
         message: "Movimiento de inventario actualizado",
         status: true,
         inventoryMovement,
       };
     } catch (error: any) {
-      information = { message: "No se pudo actualizar el movimiento de inventario", status: false };
+      const handledError = handlePrismaError(error);
+      information = { message: handledError.message, status: false };
       throw information;
     } finally {
       setActivityToLog(req, {
@@ -88,12 +94,11 @@ export class InventoryMovementService {
             inventoryMovement,
           }
         : {
-            message: "No se encontró el movimiento de inventario",
+            message: "No se encontró el movimiento de inventario",
             status: false,
           };
     } catch (error: any) {
-      throw error;
-    } finally {
+      throw handlePrismaError(error);
     }
   }
 
@@ -106,8 +111,7 @@ export class InventoryMovementService {
         inventoryMovements,
       };
     } catch (error: any) {
-      throw error;
-    } finally {
+      throw handlePrismaError(error);
     }
   }
 }

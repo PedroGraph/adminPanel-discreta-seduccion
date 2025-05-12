@@ -13,18 +13,14 @@ export interface Template {
 }
 
 export interface EmailCampaign {
-  id: number;
   name: string;
   subject: string;
-  status: "draft" | "scheduled" | "sent" | "cancelled";
+  status?: "draft" | "scheduled" | "sent" | "cancelled";
   templateId: number;
-  scheduledAt?: string;
-  sentAt?: string;
-  createdById?: number;
+  scheduledAt?: string | null;
+  createdById: number;
   openRate?: number;
   clickRate?: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface EmailSubscriber {

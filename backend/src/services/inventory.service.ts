@@ -2,24 +2,26 @@ import prisma from "../lib/prisma.js";
 import { CreateInventoryData } from "../interfaces/inventory.interface.js";
 import { setActivityToLog } from "../middleware/log.js";
 import { Request } from "express";
+import { handlePrismaError } from "../utils/handleErrors.js";
 
 export class InventoryService {
-  async  createInventory(data: CreateInventoryData, req: Request) {
+  async createInventory(data: CreateInventoryData, req: Request) {
     let information: object = {
-        status: 0,
-        message: ``,
-      };
+      status: 0,
+      message: ``,
+    };
   
     try {
       if (!data.productId)
         throw { status: 400, message: "El campo productId es obligatorio" };
       const inventory = await prisma.inventory.create({ data });
-      information = { message: "Inventario creado con éxito", status: true, inventory };
+      information = { message: "Inventario creado con éxito", status: true, inventory };
       return { message: "Inventario creado", status: true, inventory };
     } catch (error: any) {
-      information = { message: "No se pudo crear el inventario", status: false };
+      const handledError = handlePrismaError(error);
+      information = { message: handledError.message, status: false };
       throw information;
-    }finally{
+    } finally {
       setActivityToLog(req, {
         action: "create",
         entityType: "inventory",
@@ -30,19 +32,20 @@ export class InventoryService {
 
   async updateInventory(id: number, data: Partial<CreateInventoryData>, req: Request) {
     let information: object = {
-        status: 0,
-        message: ``,
-      };
+      status: 0,
+      message: ``,
+    };
   
     try {
       if (!id) throw { status: 400, message: "El campo ID es obligatorio" };
       const inventory = await prisma.inventory.update({ where: { id }, data });
-      information = { message: `Inventario actualizado con éxito - ${inventory.id}`, status: true, inventory };
+      information = { message: `Inventario actualizado con éxito - ${inventory.id}`, status: true, inventory };
       return { message: "Inventario actualizado", status: true, inventory };
     } catch (error: any) {
-      information = { message: "No se pudo actualizar el inventario", status: false };
+      const handledError = handlePrismaError(error);
+      information = { message: handledError.message, status: false };
       throw information;
-    }finally{
+    } finally {
       setActivityToLog(req, {
         action: "update",
         entityType: "inventory",
@@ -53,19 +56,20 @@ export class InventoryService {
 
   async deleteInventory(id: number, req: Request) {
     let information: object = {
-        status: 0,
-        message: ``,
+      status: 0,
+      message: ``,
     };
   
     try {
       if (!id) throw { status: 400, message: "El campo ID es obligatorio" };
       const inventory = await prisma.inventory.delete({ where: { id } });
-      information = { message: `Inventario eliminado con éxito - ${inventory.id}`, status: true, inventory };
+      information = { message: `Inventario eliminado con éxito - ${inventory.id}`, status: true, inventory };
       return { message: "Inventario eliminado", status: true, inventory };
     } catch (error: any) {
-      information = { message: "No se pudo eliminar el inventario", status: false };
+      const handledError = handlePrismaError(error);
+      information = { message: handledError.message, status: false };
       throw information;
-    }finally{
+    } finally {
       setActivityToLog(req, {
         action: "delete",
         entityType: "inventory",
@@ -80,9 +84,9 @@ export class InventoryService {
       const inventory = await prisma.inventory.findUnique({ where: { id } });
       return inventory
         ? { message: "Inventario encontrado", status: true, inventory }
-        : { message: "No se encontró el inventario", status: false };
+        : { message: "No se encontró el inventario", status: false };
     } catch (error: any) {
-      throw error;
+      throw handlePrismaError(error);
     }
   }
 
@@ -93,7 +97,7 @@ export class InventoryService {
         ? { message: "Inventarios encontrados", status: true, inventories }
         : { message: "No se encontraron inventarios", status: false };
     } catch (error: any) {
-      throw error;
+      throw handlePrismaError(error);
     }
   }
 }
